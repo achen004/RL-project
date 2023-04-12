@@ -8,6 +8,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+def DecisionTransformer(rewards, states, action,  t):
+    pass
+    return  
+
 # Get S&P 500 data from Yahoo Finance
 df = pd.read_csv("SPY.csv")
 print("df =", df.shape)
