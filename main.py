@@ -8,9 +8,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-def DecisionTransformer(rewards, states, action,  t):
-    pass
-    return  
+!git clone https://github.com/amr10073/RL-project.git
+import sys
+sys.path.append('RL-project')
+from models import decisionTransformer, model, trajectory_gpt2
 
 # Get S&P 500 data from Yahoo Finance
 df = pd.read_csv("SPY.csv")
