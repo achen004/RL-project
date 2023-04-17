@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from torch.distributions.categorical import Categorical
-import torchviz
+#import torchviz
 
 #!git clone https://github.com/amr10073/RL-project.git
 import sys
@@ -41,7 +41,7 @@ class MyCustomEnv(StocksEnv):
         end = self.frame_bound[1]
         
         # Prices over the window size
-        prices = self.df.loc[:, 'Close']
+        prices = self.df.loc[:, 'Close'] #close prices
         prices = prices.to_numpy()[start:end]
 
         # Features to use as signal
@@ -50,6 +50,7 @@ class MyCustomEnv(StocksEnv):
         print("signal_features =", signal_features.shape)
         return prices, signal_features
 
+#initialize layer with xavier initiliazed weights ~(0 mean, sqrt(2/(inputs_outputs) standard deviation)
 def layer_init(layer):
     torch.nn.init.xavier_normal_(layer.weight, gain=1.0)
     torch.nn.init.constant_(layer.bias, val=0.0)
@@ -66,6 +67,7 @@ class Agent(torch.nn.Module):
         state_num_rows, state_num_cols = env.observation_space.shape
 
         # Number of nodes in hidden layer
+        #TODO: experiment 
         num_hidden_nodes = 5
 
         # A function (represented by a neural network) that takes in a state as input,
@@ -86,8 +88,9 @@ class Agent(torch.nn.Module):
         # Optimizer for training
         self.policy_optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
 
-    # Compute policy loss for a mini-batch of states and actions
+    # Compute policy loss for a mini-batch of states and actions; action vectors of policy probabilties for each state
     def policy_loss(self, states_batch, weights):
+        #TODO fix 
         # A tensor containing the policy for each state in the mini-batch
         policies_batch = self.policy_function(states_batch)
         return -(policies_batch * weights).mean()
@@ -115,14 +118,14 @@ class Agent(torch.nn.Module):
 
             # Before passing in the state array to the policy function, we have
             # to convert it to a tensor in a specific format
-            state = torch.tensor(state)
+            state = torch.tensor(state) #window size x signal features, where the window size corresponds to the weekdays, and the num of signal features are our features 
 
             # Converts the array from shape (window_size, num_features) to (1, window_size, num_features)
             state = torch.unsqueeze(state, dim=0)
 
             # Compute the action we need to take
-            policy = self.policy_function(state)
-            action = Categorical(policy).sample().item()
+            policy = self.policy_function(state) #[stochastic] policy aka agent 
+            action = Categorical(policy).sample().item() #categorical policies are used in discrete action spaces
             prob = policy[0, action]
 
             # Take that action, collect a reward, and observe the new state
@@ -132,6 +135,7 @@ class Agent(torch.nn.Module):
             batch_acts.append(action)
             batch_probs.append(prob)
 
+            #taking action: buy or sell 
             if action == 0:
                 ep_rews.append([rew, 0])
             elif action == 1:
@@ -174,7 +178,7 @@ while True:
     state = torch.tensor(state)
     state = torch.unsqueeze(state, dim=0)
 
-    policy = agent.policy_function(state)
+    policy = agent.policy_function(state) 
     action = Categorical(policy).sample().item()
     
     state, rewards, done, info = test_env.step(action)
@@ -184,10 +188,12 @@ while True:
         break
 
 # Compute performance of our trading strategy vs. S&P 500
+# Percentage change in SP500 close price from start to end; benchmark 
 perf_SP500 = df2.loc[df2.shape[0]-1, "Close"] / df2.loc[0, "Close"] - 1
 perf_SP500 = np.round(perf_SP500 * 100, 2)
 print("S&P 500 performance = {}%".format(perf_SP500))
-perf_agent = info["total_profit"] - 1
+#percent increase or decrease in investments 
+perf_agent = info["total_profit"] - 1 #info is a dictionary
 perf_agent = np.round(perf_agent * 100, 2)
 print("Agent performance   = {}%".format(perf_agent))
 
