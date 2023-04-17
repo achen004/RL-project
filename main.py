@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from torch.distributions.categorical import Categorical
+import torchviz
 
 #!git clone https://github.com/amr10073/RL-project.git
 import sys
@@ -49,14 +50,14 @@ class MyCustomEnv(StocksEnv):
         print("signal_features =", signal_features.shape)
         return prices, signal_features
 
-def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
+def layer_init(layer):
+    torch.nn.init.xavier_normal_(layer.weight, gain=1.0)
+    torch.nn.init.constant_(layer.bias, val=0.0)
     return layer
 
 # We define a deep RL agent
 class Agent(torch.nn.Module):
-    def __init__(self, env, learning_rate, epsilon):
+    def __init__(self, env, epsilon, learning_rate):
         super().__init__()
         self.env = env
         self.epsilon = epsilon
@@ -69,59 +70,34 @@ class Agent(torch.nn.Module):
 
         # A function (represented by a neural network) that takes in a state as input,
         # and outputs - for each possible action - the probability of taking that action
-        self.policy_function = torch.nn.Sequential(layer_init(torch.nn.Linear(in_features=state_num_rows * state_num_cols,
+        self.policy_function = torch.nn.Sequential(torch.nn.Flatten(start_dim=1, end_dim=-1),
+                                                   layer_init(torch.nn.Linear(in_features=state_num_rows * state_num_cols,
                                                                    out_features=num_hidden_nodes,
                                                                    dtype=torch.float64)),
                                                    layer_init(torch.nn.Linear(in_features=num_hidden_nodes,
                                                                    out_features=env.action_space.n,
                                                                    dtype=torch.float64)),
-                                                   torch.nn.Softmax()
+                                                   torch.nn.LogSoftmax()
                                                    )
+                
+        for tensor in self.policy_function.parameters():
+            tensor.requires_grad_(True)
         
         # Optimizer for training
-        self.optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
-
-    # Actor (policy function)
-    def policy(self, state):
-        state = torch.flatten(state)
-        policy_ = self.policy_function(state)
-        
-        if policy_[0].item() == 0 and policy_[1].item() == 0:
-            return torch.Tensor([0.5, 0.5])
-        return policy_
-    
-    # Epsilon-greedy approach
-    def select_action(self, state):
-        # Compute probabilities of taking each action
-        probs = self.policy(state)
-
-        # Take the action corresponding to the highest probability
-        # (the greedy action) with probability 1-epsilon, and take
-        # a random action with probability epsilon
-        if np.random.uniform(0, 1) < self.epsilon:
-            return self.env.action_space.sample()
-        else:
-            return torch.argmax(probs)
+        self.policy_optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
 
     # Compute policy loss for a mini-batch of states and actions
-    def policy_loss(self, states_batch, actions_batch, weights):
-        # For each state in this mini-batch, compute the log probability of taking the action
-        # that we took in that state
-        logp = torch.zeros_like(weights)
-        for i in range(states_batch.shape[0]):
-            state = states_batch[i]
-            action = actions_batch[i]
-            logp[i] = Categorical(self.policy(state)).log_prob(action)
-        
-        loss = -(logp * weights).mean()
-        print("loss =", loss)
-        return loss
-
+    def policy_loss(self, states_batch, weights):
+        # A tensor containing the policy for each state in the mini-batch
+        policies_batch = self.policy_function(states_batch)
+        return -(policies_batch * weights).mean()
+    
     # Train for one epoch
-    def train(self, batch_size=32):
+    def train_one_epoch(self, batch_size=32):
         # Make some empty lists for saving mini-batches of observations
         batch_obs = []          # for states
         batch_acts = []         # for actions
+        batch_probs = []        # for probabilities of taking the actions we took
         batch_weights = []      # for R(tau) weighting in policy gradient
         batch_rets = []         # for measuring episode returns
         batch_lens = []         # for measuring episode lengths
@@ -131,86 +107,76 @@ class Agent(torch.nn.Module):
         done = False            # signal from environment that episode is over
         ep_rews = []            # list for rewards accrued throughout the episode
 
-        # A flag as to whether or not the agent is taking an action for the first time
-        first_action = True
-
         # Collect experience by executing trades in the environment, using the
         # current policy
         while True:
             # Save the current state in our minibatch
             batch_obs.append(state.copy())
 
-            # Take an action, collect reward, and observe new state
-            state = torch.DoubleTensor(state)
-            if first_action:
-                # Always buy the first time, just to get the algo started
-                action = 1
-                first_action = False
-            else:
-                action = self.select_action(state)
-                #print("action =", action)
-            
+            # Before passing in the state array to the policy function, we have
+            # to convert it to a tensor in a specific format
+            state = torch.tensor(state)
+
+            # Converts the array from shape (window_size, num_features) to (1, window_size, num_features)
+            state = torch.unsqueeze(state, dim=0)
+
+            # Compute the action we need to take
+            policy = self.policy_function(state)
+            action = Categorical(policy).sample().item()
+            prob = policy[0, action]
+
+            # Take that action, collect a reward, and observe the new state
             state, rew, done, info = self.env.step(action)
 
-            # Save in memory the action we took and reward we collected
+            # Save in memory the action we took, its probability, and the reward we collected
             batch_acts.append(action)
-            ep_rews.append(rew)
+            batch_probs.append(prob)
+
+            if action == 0:
+                ep_rews.append([rew, 0])
+            elif action == 1:
+                ep_rews.append([0, rew])
 
             # If the episode is over
             if done:
                 print("info =", info)
-                # Compute the episodic return (the total reward we accumulated during this episode)
-                ep_ret = sum(ep_rews)
-                print("Episodic return =", ep_ret)
-
-                # Compute how many rewards we collected
-                ep_len = len(ep_rews)
-
-                # Save in memory the values we computed above
-                batch_rets.append(ep_ret)
-                batch_lens.append(ep_len)
-
-                # the weight for each logprob(a|s) is R(tau)
-                batch_weights += [ep_ret] * ep_len
-
-                # reset episode-specific variables
-                state, done, ep_rews = self.env.reset(), False, []
-
-                # end experience loop if we have enough of it
-                if len(batch_obs) > batch_size:
-                    break
-
+                break
+        
         # source: https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html#implementing-the-simplest-policy-gradient
 
         # Take a single policy gradient update step
-        self.optimizer.zero_grad()
-        
-        batch_loss = self.policy_loss(states_batch=torch.as_tensor(np.stack(batch_obs), dtype=torch.float64),
-                                      actions_batch=torch.as_tensor(batch_acts, dtype=torch.int32),
-                                      weights=torch.as_tensor(batch_weights, dtype=torch.float64)
-                                      )
+        self.policy_optimizer.zero_grad()
+        states_batch = torch.as_tensor(np.stack(batch_obs), dtype=torch.float64)
+        ep_rews = torch.as_tensor(ep_rews, dtype=torch.float64) # the weight for each logprob(a|s) is R(tau)
+
+        batch_loss = self.policy_loss(states_batch, ep_rews)
+        print("loss =", batch_loss.item())
         batch_loss.backward()
-        self.optimizer.step()
-        
+
+        self.policy_optimizer.step()
+        self.batch_loss = batch_loss
         return batch_loss, batch_rets, batch_lens
+    
+    def train(self, n_epochs):
+        for _ in range(n_epochs):
+            self.train_one_epoch()
 
 # Initialize an environment for training the agent, and train the agent on it
 # by updating the policy and value functions
 train_env = MyCustomEnv(df2, window_size=5, frame_bound=(5, int(train_ratio*N)))
-agent = Agent(train_env, learning_rate=1.5, epsilon=0)
+agent = Agent(train_env, epsilon=0, learning_rate=1.5)
+agent.train(n_epochs=20)
 
-n_epochs = 3
-for i in range(n_epochs):
-    print("EPOCH {} =============================================================".format(i))
-    agent.train(batch_size=32)
-
-"""
 # Configure an environment for testing, and run the trained agent on it
 test_env = MyCustomEnv(df2, window_size=5, frame_bound=(int(train_ratio*N), N))
 state = test_env.reset()
 while True:
-    state = torch.DoubleTensor(state)
-    action = agent.select_action(state)
+    state = torch.tensor(state)
+    state = torch.unsqueeze(state, dim=0)
+
+    policy = agent.policy_function(state)
+    action = Categorical(policy).sample().item()
+    
     state, rewards, done, info = test_env.step(action)
     
     if done:
@@ -229,4 +195,3 @@ plt.figure(figsize=(15, 6))
 plt.cla()
 test_env.render_all()
 plt.show()
-"""
