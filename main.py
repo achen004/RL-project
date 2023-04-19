@@ -46,6 +46,7 @@ class MyCustomEnv(StocksEnv):
 
         # Features to use as signal
         signal_features = self.df.loc[:, ['Close', 'Volume', 'momentum_rsi', 'volume_obv']]#, 'trend_macd_diff']]
+        #TODO cash at hand value; incorporate other features to set constraints amounts to buy/sell 
         signal_features = signal_features.to_numpy()[start:end]
         print("signal_features =", signal_features.shape)
         return prices, signal_features
@@ -68,7 +69,8 @@ class Agent(torch.nn.Module):
 
         # Number of nodes in hidden layer
         #TODO: experiment 
-        num_hidden_nodes = 5
+        num_hidden_nodes = 5 #originally 5; changing this doesn't impact outputs
+        #what if we increase number of epochs along with this? 
 
         # A function (represented by a neural network) that takes in a state as input,
         # and outputs - for each possible action - the probability of taking that action
@@ -83,13 +85,17 @@ class Agent(torch.nn.Module):
                                                    )
                 
         for tensor in self.policy_function.parameters():
-            tensor.requires_grad_(True)
+            tensor.requires_grad_(True) #record operations on tensor
         
-        # Optimizer for training
+        # Optimizer for training; TODO learning rate
         self.policy_optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
 
     # Compute policy loss for a mini-batch of states and actions; action vectors of policy probabilties for each state
     def policy_loss(self, states_batch, weights):
+        """
+        states_batch:  tensor format of stack of states from stored batch
+        weights: weights of policy model
+        """
         #TODO fix 
         # A tensor containing the policy for each state in the mini-batch
         policies_batch = self.policy_function(states_batch)
@@ -168,7 +174,7 @@ class Agent(torch.nn.Module):
 # Initialize an environment for training the agent, and train the agent on it
 # by updating the policy and value functions
 train_env = MyCustomEnv(df2, window_size=5, frame_bound=(5, int(train_ratio*N)))
-agent = Agent(train_env, epsilon=0, learning_rate=1.5)
+agent = Agent(train_env, epsilon=0, learning_rate=1.5) #TODO adjust learning_rate; maybe annealize it 
 agent.train(n_epochs=20)
 
 # Configure an environment for testing, and run the trained agent on it
