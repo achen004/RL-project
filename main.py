@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from torch.distributions.categorical import Categorical
+import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler 
 #import torchviz
 
 #!git clone https://github.com/amr10073/RL-project.git
@@ -31,6 +33,7 @@ test_ratio = 0.2
 train_ratio = 1 - test_ratio
 
 # Configure an environment for training, and train the agent on it
+#TODO implement MtSim
 class MyCustomEnv(StocksEnv):
     def __init__(self, df, window_size, frame_bound):
         super().__init__(df, window_size, frame_bound)
@@ -89,6 +92,8 @@ class Agent(torch.nn.Module):
         
         # Optimizer for training; TODO learning rate
         self.policy_optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
+
+        #self.scheduler=lr_scheduler.StepLR(self.policy_optimizer, step_size= , gamma=)
 
     # Compute policy loss for a mini-batch of states and actions; action vectors of policy probabilties for each state
     def policy_loss(self, states_batch, weights):
@@ -155,7 +160,7 @@ class Agent(torch.nn.Module):
         # source: https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html#implementing-the-simplest-policy-gradient
 
         # Take a single policy gradient update step
-        self.policy_optimizer.zero_grad()
+        self.policy_optimizer.zero_grad()  #sets gradients of all optimized torch tensors to zero
         states_batch = torch.as_tensor(np.stack(batch_obs), dtype=torch.float64)
         ep_rews = torch.as_tensor(ep_rews, dtype=torch.float64) # the weight for each logprob(a|s) is R(tau)
 
@@ -164,6 +169,7 @@ class Agent(torch.nn.Module):
         batch_loss.backward()
 
         self.policy_optimizer.step()
+        #self.scheduler.step()
         self.batch_loss = batch_loss
         return batch_loss, batch_rets, batch_lens
     
@@ -174,8 +180,9 @@ class Agent(torch.nn.Module):
 # Initialize an environment for training the agent, and train the agent on it
 # by updating the policy and value functions
 train_env = MyCustomEnv(df2, window_size=5, frame_bound=(5, int(train_ratio*N)))
-agent = Agent(train_env, epsilon=0, learning_rate=1.5) #TODO adjust learning_rate; maybe annealize it 
-agent.train(n_epochs=20)
+#epsilon=0,  full exploration; TODO what if we implemented GREEDY approach? 
+agent = Agent(train_env, epsilon=0, learning_rate=1e-4) #TODO adjust learning_rate; maybe annealize it 
+agent.train(n_epochs=50)
 
 # Configure an environment for testing, and run the trained agent on it
 test_env = MyCustomEnv(df2, window_size=5, frame_bound=(int(train_ratio*N), N))
