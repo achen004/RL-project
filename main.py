@@ -1,6 +1,7 @@
 import gym
 from gym_anytrading.envs import StocksEnv
 from stable_baselines3 import A2C, PPO, DDPG
+import regularizedPPO
 import yfinance as yf
 from pandas_datareader import data as pdr
 from ta import add_all_ta_features
@@ -11,6 +12,9 @@ import torch
 from torch.distributions.categorical import Categorical
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler 
+import pytz
+from datetime import datetime, timedelta
+from gym_mtsim import MtSimulator, OrderType, Timeframe, FOREX_DATA_PATH
 #import torchviz
 
 #!git clone https://github.com/amr10073/RL-project.git
@@ -93,7 +97,7 @@ class Agent(torch.nn.Module):
         # Optimizer for training; TODO learning rate
         self.policy_optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
 
-        #self.scheduler=lr_scheduler.StepLR(self.policy_optimizer, step_size= , gamma=)
+        self.scheduler=lr_scheduler.StepLR(self.policy_optimizer, step_size=2, gamma=0.1)
 
     # Compute policy loss for a mini-batch of states and actions; action vectors of policy probabilties for each state
     def policy_loss(self, states_batch, weights):
@@ -136,6 +140,7 @@ class Agent(torch.nn.Module):
 
             # Compute the action we need to take
             policy = self.policy_function(state) #[stochastic] policy aka agent 
+            #sampling actions from a probability density guarantees exploration
             action = Categorical(policy).sample().item() #categorical policies are used in discrete action spaces
             prob = policy[0, action]
 
@@ -169,7 +174,7 @@ class Agent(torch.nn.Module):
         batch_loss.backward()
 
         self.policy_optimizer.step()
-        #self.scheduler.step()
+        self.scheduler.step() #learning rate optimizer step
         self.batch_loss = batch_loss
         return batch_loss, batch_rets, batch_lens
     
