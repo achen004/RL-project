@@ -1,30 +1,16 @@
-import gym
-from gym_anytrading.envs import StocksEnv
-from stable_baselines3 import A2C, PPO, DDPG
-import regularizedPPO
-import yfinance as yf
-from pandas_datareader import data as pdr
+from gym_anytrading.envs import StocksEnv, TradingEnv
 from ta import add_all_ta_features
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from torch.distributions.categorical import Categorical
-import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler 
-import pytz
-from datetime import datetime, timedelta
-from gym_mtsim import MtSimulator, OrderType, Timeframe, FOREX_DATA_PATH
-#import torchviz
+from enum import Enum
 
-#!git clone https://github.com/amr10073/RL-project.git
-import sys
-sys.path.append('RL-project')
-#from models.model import TrajectoryModel
-#from models import decisionTransformer, model, trajectory_gpt2
 
 # Get S&P 500 data from Yahoo Finance
-df = pd.read_csv("SPY-1hr-2yr.csv")
+df = pd.read_csv("SPY_prices_2y_1h.csv")
 
 print("df =", df.shape)
 
@@ -35,14 +21,59 @@ N = df2.shape[0]
 # Ratio for train/test split (what % of data to hold out as test)
 test_ratio = 0.2
 train_ratio = 1 - test_ratio
+"""
+Algorithm for Environment:
+Our Agent will be buying or selling 1 stock at every timestep
+We will keep track of the total number of shares it owns and the price it paid for each share
 
-# Configure an environment for training, and train the agent on it
-#TODO implement MtSim
-class MyCustomEnv(StocksEnv):
-    def __init__(self, df, window_size, frame_bound):
+At every tick, Timestep T, the Agent will be rewarded based on the following formula:
+step_reward = (Average Bought_Price of shares at T) - (Price of share sold at T) * (Number of shares sold at T) /// Number of Shares sold at T = 1
+
+Profit at each step based on signals of market data 
+Total profit at T += step_reward
+
+Algorithm for Agent:
+Our Agent Can Decide to Take 1 of 3 Actions:
+1. Buy 1 share
+2. Sell 1 share
+3. Hold
+
+The Agent will be rewarded based on the following formula:
+step_reward = (Average Bought_Price of shares at T) - (Price of share sold at T) * (Number of shares sold at T) /// Number of Shares sold at T = 1
+
+"""
+class Actions(Enum):
+    Sell = -1
+    Hold = 0
+    Buy = 1
+
+# Configure an environment for training - specifically we take StocksEnv
+# and customize it according to the problem we're trying to solve
+#
+# We assume unlimited margin (the agent can buy as much stock as it wants)
+class MyCustomEnv(StocksEnv, TradingEnv):
+    # Call the StocksEnv constructor, and on top of that, initialize our own variables
+    def __init__(self, df, window_size, frame_bound, MAX_SHARES=1000):
         super().__init__(df, window_size, frame_bound)
+        
+        # The total number of shares we currently own
+        self.total_shares = 0
+        
+        # The profit we've made so far
+        self.profit_at_T = 0
+
+        # Maximum number of shares an agent can hold at any given time
+        # It keeps margin trading from getting too out of control
+        self.MAX_SHARES = MAX_SHARES
+        
+        # The prices of the shares we bought
+        self.prices_of_shares_we_bought = [] 
+
+        #limit % of shares to buy 
     
-    # Override the StocksEnv _process_data function with our own function
+    # ====================================================================
+    # Override the StocksEnv functions with our own functions
+    # ====================================================================
     def _process_data(self):
         start = self.frame_bound[0] - self.window_size
         end = self.frame_bound[1]
@@ -50,13 +81,72 @@ class MyCustomEnv(StocksEnv):
         # Prices over the window size
         prices = self.df.loc[:, 'Close'] #close prices
         prices = prices.to_numpy()[start:end]
-
+        self.total_profit = 0
         # Features to use as signal
         signal_features = self.df.loc[:, ['Close', 'Volume', 'momentum_rsi', 'volume_obv']]#, 'trend_macd_diff']]
         #TODO cash at hand value; incorporate other features to set constraints amounts to buy/sell 
         signal_features = signal_features.to_numpy()[start:end]
         print("signal_features =", signal_features.shape)
         return prices, signal_features
+    
+    def _calculate_reward(self, action):
+        # Initialize a variable for the reward the agent receives from taking this action
+        step_reward = 0
+        
+        if action == Actions.Hold.value:
+            return step_reward
+        
+        elif action == Actions.Buy.value and self.total_shares < self.MAX_SHARES:
+            current_price = self.prices[self._current_tick]
+            self.prices_of_shares_we_bought.append(current_price)
+            self.total_shares += 1
+            
+            # We don't reward buying, because we don't know yet if we'll profit from this
+            # trade or not. If we rewarded buying, then the agent might keep buying forever,
+            # and never selling.
+            return step_reward
+        
+        elif action == Actions.Sell.value and self.total_shares > 0:
+            current_price = self.prices[self._current_tick]
+            average_buy_price = np.mean(self.prices_of_shares_we_bought)
+            self.total_shares -=1
+            self.prices_of_shares_we_bought = [average_buy_price for _ in range(self.total_shares)]
+            step_reward = (current_price - average_buy_price)
+            self._total_reward += step_reward
+            return step_reward
+    
+        # This only runs when we try to sell but we don't have any shares to sell
+        else:
+            return step_reward
+
+    # ====================================================================
+    # Override the TradingEnv step function with our own function
+    # ====================================================================
+    def step(self, action):
+        # Take a step in the environment
+        self._done = False
+        self._current_tick += 1
+
+        if self._current_tick == self._end_tick:
+            self._done = True
+
+        # Calculate the reward received in this action
+        step_reward = self._calculate_reward(action)
+
+        print("[training] action =", action)
+
+        self._position_history.append(self._position)
+        
+        # Get the next state
+        observation = self._get_observation()
+        info = dict(
+            total_reward = self._total_reward,
+            total_profit = self._total_profit,
+            position = self._position.value
+        )
+        self._update_history(info)
+
+        return observation, step_reward, self._done, info
 
 #initialize layer with xavier initiliazed weights ~(0 mean, sqrt(2/(inputs_outputs) standard deviation)
 def layer_init(layer):
@@ -90,7 +180,7 @@ class Agent(torch.nn.Module):
                                                                    dtype=torch.float64)),
                                                    torch.nn.LogSoftmax()
                                                    )
-                
+        
         for tensor in self.policy_function.parameters():
             tensor.requires_grad_(True) #record operations on tensor
         
@@ -151,11 +241,13 @@ class Agent(torch.nn.Module):
             batch_acts.append(action)
             batch_probs.append(prob)
 
-            #taking action: buy or sell 
+            #taking action: buy or sell or  do nothing
+            if action == -1:
+                ep_rews.append([rew, 0, 0])
             if action == 0:
-                ep_rews.append([rew, 0])
+                ep_rews.append([0,rew, 0])
             elif action == 1:
-                ep_rews.append([0, rew])
+                ep_rews.append([0, 0, rew])
 
             # If the episode is over
             if done:
@@ -183,11 +275,15 @@ class Agent(torch.nn.Module):
             self.train_one_epoch()
 
 # Initialize an environment for training the agent, and train the agent on it
-# by updating the policy and value functions
+# by updating the policy function
 train_env = MyCustomEnv(df2, window_size=5, frame_bound=(5, int(train_ratio*N)))
+
+print("bid =", train_env.trade_fee_bid_percent)
+print("ask =", train_env.trade_fee_ask_percent)
+
 #epsilon=0,  full exploration; TODO what if we implemented GREEDY approach? 
 agent = Agent(train_env, epsilon=0, learning_rate=1e-4) #TODO adjust learning_rate; maybe annealize it 
-agent.train(n_epochs=50)
+agent.train(n_epochs=20)
 
 # Configure an environment for testing, and run the trained agent on it
 test_env = MyCustomEnv(df2, window_size=5, frame_bound=(int(train_ratio*N), N))
@@ -196,8 +292,9 @@ while True:
     state = torch.tensor(state)
     state = torch.unsqueeze(state, dim=0)
 
-    policy = agent.policy_function(state) 
+    policy = agent.policy_function(state)
     action = Categorical(policy).sample().item()
+    print("[testing] action =", action)
     
     state, rewards, done, info = test_env.step(action)
     
