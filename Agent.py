@@ -37,8 +37,6 @@ class Agent(torch.nn.Module):
                                                    torch.nn.LogSoftmax()
                                                    )
         
-        print("policy func shapes=", [param.shape for param in self.policy_function.parameters()])
-        
         for tensor in self.policy_function.parameters():
             tensor.requires_grad_(True) #record operations on tensor
         
@@ -59,7 +57,7 @@ class Agent(torch.nn.Module):
         return -(policies_batch * weights).mean()
     
     # Train for one epoch
-    def train_one_epoch(self, batch_size=32):
+    def train_one_epoch(self, epoch_num):
         # Make some empty lists for saving mini-batches of observations
         batch_obs = []          # for states
         batch_acts = []         # for actions
@@ -97,7 +95,6 @@ class Agent(torch.nn.Module):
 
             # Take that action, collect a reward, and observe the new state
             state, reward, done, info = self.env.step(action)
-            #print("info =", info)
 
             # Save in memory the action we took, its probability, and the reward we collected
             batch_acts.append(action)
@@ -113,10 +110,14 @@ class Agent(torch.nn.Module):
             elif action == Actions.Buy.value:
                 ep_rews.append([0, 0, reward])
                 buy_count += 1
-    
-        # print(f"final info = {info}")    
-        # print(f"[training] buy count = {self.env.buy_count}, sell count = {self.env.sell_count}, hold count = {self.env.hold_count}")
+
+            # if reward > 0:
+            #     print("[training epoch {}] info = {}".format(epoch_num, info))
         
+        print("[training epoch {}] total reward = {}".format(epoch_num, self.env._total_reward))
+
+        # print(f"[training] buy count = {self.env.buy_count}, sell count = {self.env.sell_count}, hold count = {self.env.hold_count}")    
+
         # source: https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html#implementing-the-simplest-policy-gradient
 
         # Take a single policy gradient update step
@@ -133,5 +134,5 @@ class Agent(torch.nn.Module):
         return batch_loss, batch_rets, batch_lens
     
     def train(self, n_epochs):
-        for _ in range(n_epochs):
-            self.train_one_epoch()
+        for i in range(1, n_epochs+1):
+            self.train_one_epoch(i)

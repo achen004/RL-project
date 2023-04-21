@@ -24,9 +24,6 @@ class MyCustomEnv(StocksEnv, TradingEnv):
 
         # The total number of shares we currently own
         self.total_shares = 0
-        
-        # The profit we've made so far
-        self.profit_at_T = 0
 
         # Maximum number of shares an agent can hold at any given time
         # It keeps margin trading from getting too out of control
@@ -64,7 +61,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
     def _calculate_reward(self, action):
         # Initialize a variable for the reward the agent receives from taking this action
         step_reward = 0
-        
+
         if action == Actions.Hold.value:
             self.action_history.append(action)
             return step_reward
@@ -87,9 +84,10 @@ class MyCustomEnv(StocksEnv, TradingEnv):
             
             current_price = self.prices[self._current_tick]
             average_buy_price = np.mean(self.prices_of_shares_we_bought)
-            self.total_shares -=1
+            self.total_shares -= 1
             self.prices_of_shares_we_bought = [average_buy_price for _ in range(self.total_shares)]
             step_reward = (current_price - average_buy_price)
+
             self._total_reward += step_reward
             self.sell_count += 1
             return step_reward
@@ -113,18 +111,26 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         self._done = False
         self._current_tick += 1
 
+        # If we've reached the end of the episode
         if self._current_tick == self._end_tick:
             self._done = True
 
         # Calculate the reward received in this action
         step_reward = self._calculate_reward(action)
 
-        #print("[training] action =", action)
-        
+        # At the end of the episode, penalize the agent for any unrealized losses it may have
+        # incurred throughout the episode, and similarly, reward it for any unrealized gains
+        if self._done:
+            current_price = self.prices[self._current_tick]
+            average_buy_price = np.mean(self.prices_of_shares_we_bought)
+            step_reward = (current_price - average_buy_price)
+            self._total_reward += step_reward
+
         # Get the next state
         observation = self._get_observation()
         info = dict(
-            total_reward = self._total_reward,
+            step_reward = np.round(step_reward, 2),
+            total_reward = np.round(self._total_reward, 2),
             action = action
         )
         self._update_history(info)

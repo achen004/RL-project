@@ -28,7 +28,7 @@ train_env = MyCustomEnv(df2, window_size=env_window_size, frame_bound=(env_windo
 #epsilon=0,  full exploration; TODO what if we implemented GREEDY approach? 
 # Initialize and train an agent on this environment by updating the policy function
 agent = Agent(train_env, epsilon=0, learning_rate=1e-4) #TODO adjust learning_rate; maybe annealize it 
-agent.train(n_epochs=2)
+agent.train(n_epochs=20)
 
 train_env.render_all()
 
@@ -45,7 +45,7 @@ while not done:
     
     state, rewards, done, info = test_env.step(action)
 
-    print("info =", info)
+print("[testing] total reward =", test_env._total_reward)
 
 # Compute performance of our trading strategy vs. S&P 500
 # Percentage change in SP500 close price from start to end; benchmark 
