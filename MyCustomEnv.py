@@ -103,15 +103,9 @@ class MyCustomEnv(StocksEnv, TradingEnv):
     # Override the TradingEnv functions with our own functions
     # ====================================================================
     def reset(self):
-        print("\n\n\n\n ***** RESET ******* \n\n\n\n")
-        # Call TradingEnv.reset()
-        super().reset()
-        
-
+        super().reset() # call TradingEnv.reset()
         self.action_history = []
         self.total_shares = 0
-        print("[reset] total reward =", self._total_reward, self.total_shares)
-
         return self._get_observation()
 
     def step(self, action):
@@ -132,13 +126,15 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         info = dict(
             total_reward = self._total_reward,
             action = action
-            #total_profit = self._total_profit,
         )
         self._update_history(info)
 
         return observation, step_reward, self._done, info
     
     def render_all(self, mode='human'):
+        plt.figure(figsize=(15, 6))
+        plt.cla()
+
         window_ticks = np.arange(len(self.action_history))
 
         plt.plot(self.prices)
@@ -157,13 +153,11 @@ class MyCustomEnv(StocksEnv, TradingEnv):
             else:
                 denied_ticks.append(tick)
         
-        plt.plot(buy_ticks, self.prices[buy_ticks], 'go')
-        plt.plot(sell_ticks, self.prices[sell_ticks], 'ro')
+        plt.plot(buy_ticks, self.prices[buy_ticks], 'go', label="Buy")
+        plt.plot(sell_ticks, self.prices[sell_ticks], 'ro', label="Sell")
         plt.legend()
         # plt.plot(hold_ticks, self.prices[hold_ticks], 'bo', alpha=0.25)
         # plt.plot(denied_ticks, self.prices[denied_ticks], 'bo', alpha=0.25)
 
-        plt.suptitle(
-            "Total Reward: %.6f" % self._total_reward + ' ~ ' +
-            "Total Profit: %.6f" % self._total_profit
-        )
+        plt.suptitle("Total Reward: %.6f" % self._total_reward)
+        plt.show()

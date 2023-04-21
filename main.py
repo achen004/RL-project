@@ -22,38 +22,30 @@ test_ratio = 0.2
 train_ratio = 1 - test_ratio
 
 # Initialize an environment for training the agent, and train the agent on it
-# by updating the policy function
 env_window_size = 5
 train_env = MyCustomEnv(df2, window_size=env_window_size, frame_bound=(env_window_size, int(train_ratio*N)))
 
-print("bid =", train_env.trade_fee_bid_percent)
-print("ask =", train_env.trade_fee_ask_percent)
-
 #epsilon=0,  full exploration; TODO what if we implemented GREEDY approach? 
+# Initialize and train an agent on this environment by updating the policy function
 agent = Agent(train_env, epsilon=0, learning_rate=1e-4) #TODO adjust learning_rate; maybe annealize it 
 agent.train(n_epochs=2)
 
-# plt.figure(figsize=(15, 6))
-# plt.cla()
-# train_env.render_all()
-# plt.show()
+train_env.render_all()
 
-# Configure an environment for testing, and run the trained agent on it
+# Initialize an environment for testing, and run the trained agent on it
 test_env = MyCustomEnv(df2, window_size=env_window_size, frame_bound=(int(train_ratio*N), N))
 state = test_env.reset()
-while True:
+done = False
+while not done:
     state = torch.tensor(state)
     state = torch.unsqueeze(state, dim=0)
 
     policy = agent.policy_function(state)
     action = Categorical(policy).sample().item()
-    #print("[testing] action =", action)
     
     state, rewards, done, info = test_env.step(action)
-    
-    if done:
-        print("info =", info)
-        break
+
+    print("info =", info)
 
 # Compute performance of our trading strategy vs. S&P 500
 # Percentage change in SP500 close price from start to end; benchmark 
@@ -66,7 +58,4 @@ perf_SP500 = np.round(perf_SP500 * 100, 2)
 #perf_agent = np.round(perf_agent * 100, 2)
 #print("Agent performance   = {}%".format(perf_agent))
 
-plt.figure(figsize=(15, 6))
-plt.cla()
 test_env.render_all()
-plt.show()

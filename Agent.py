@@ -45,7 +45,7 @@ class Agent(torch.nn.Module):
         # Optimizer for training; TODO learning rate
         self.policy_optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
 
-        self.scheduler=lr_scheduler.StepLR(self.policy_optimizer, step_size=2, gamma=0.1)
+        self.scheduler = lr_scheduler.StepLR(self.policy_optimizer, step_size=2, gamma=0.1)
 
     # Compute policy loss for a mini-batch of states and actions; action vectors of policy probabilties for each state
     def policy_loss(self, states_batch, weights):
