@@ -12,18 +12,14 @@ def layer_init(layer):
 
 # We define a deep RL agent
 class Agent(torch.nn.Module):
-    def __init__(self, env, epsilon, learning_rate):
+    def __init__(self, learning_rate, action_space_dim, observation_space_dim):
         super().__init__()
-        self.env = env
-        self.epsilon = epsilon
 
         # The number of rows and columns in the array representation of a state
-        state_num_rows, state_num_cols = env.observation_space.shape
+        state_num_rows, state_num_cols = observation_space_dim
 
         # Number of nodes in hidden layer
-        #TODO: experiment 
         num_hidden_nodes = 5 #originally 5; changing this doesn't impact outputs
-        #what if we increase number of epochs along with this? 
 
         # A function (represented by a neural network) that takes in a state as input,
         # and outputs - for each possible action - the probability of taking that action
@@ -32,10 +28,11 @@ class Agent(torch.nn.Module):
                                                                    out_features=num_hidden_nodes,
                                                                    dtype=torch.float64)),
                                                    layer_init(torch.nn.Linear(in_features=num_hidden_nodes,
-                                                                   out_features=env.action_space.n,
+                                                                   out_features=action_space_dim,
                                                                    dtype=torch.float64)),
-                                                   torch.nn.LogSoftmax()
+                                                   torch.nn.LogSoftmax() # use this instead of softmax for better numerical stability
                                                    )
+        #include critic function: value(state, action)
         
         for tensor in self.policy_function.parameters():
             tensor.requires_grad_(True) #record operations on tensor
@@ -57,7 +54,7 @@ class Agent(torch.nn.Module):
         return -(policies_batch * weights).mean()
     
     # Train for one epoch
-    def train_one_epoch(self, epoch_num):
+    def train_one_epoch(self, env, epoch_num):
         # Make some empty lists for saving mini-batches of observations
         batch_obs = []          # for states
         batch_acts = []         # for actions
@@ -67,7 +64,7 @@ class Agent(torch.nn.Module):
         batch_lens = []         # for measuring episode lengths
 
         # Reset episode-specific variables
-        state = self.env.reset()  # first obs comes from starting distribution
+        state = env.reset()  # first obs comes from starting distribution
         done = False            # signal from environment that episode is over
         ep_rews = []            # list for rewards accrued throughout the episode
 
@@ -88,13 +85,16 @@ class Agent(torch.nn.Module):
             state = torch.unsqueeze(state, dim=0)
 
             # Compute the action we need to take
-            policy = self.policy_function(state) #[stochastic] policy aka agent 
-            #sampling actions from a probability density guarantees exploration
-            action = Categorical(policy).sample().item() #categorical policies are used in discrete action spaces
+            policy = self.policy_function(state) #[stochastic] policy aka agent
+
+            # Sample an action from the probability distribution (policy)
+            # This ensures exploration instead of just always choosing the greedy action
+            # Categorical policies are used in discrete action spaces
+            action = Categorical(policy).sample().item()
             prob = policy[0, action]
 
             # Take that action, collect a reward, and observe the new state
-            state, reward, done, info = self.env.step(action)
+            state, reward, done, info = env.step(action)
 
             # Save in memory the action we took, its probability, and the reward we collected
             batch_acts.append(action)
@@ -114,9 +114,9 @@ class Agent(torch.nn.Module):
             # if reward > 0:
             #     print("[training epoch {}] info = {}".format(epoch_num, info))
         
-        print("[training epoch {}] total reward = {}".format(epoch_num, self.env._total_reward))
+        print("[training epoch {}] total reward = {}".format(epoch_num, env._total_reward))
 
-        # print(f"[training] buy count = {self.env.buy_count}, sell count = {self.env.sell_count}, hold count = {self.env.hold_count}")    
+        # print(f"[training] buy count = {env.buy_count}, sell count = {env.sell_count}, hold count = {env.hold_count}")    
 
         # source: https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html#implementing-the-simplest-policy-gradient
 
@@ -130,9 +130,10 @@ class Agent(torch.nn.Module):
 
         self.policy_optimizer.step()
         self.scheduler.step() #learning rate optimizer step
-        self.batch_loss = batch_loss
+        
+        print("loss =", batch_loss.item())
         return batch_loss, batch_rets, batch_lens
     
-    def train(self, n_epochs):
+    def train(self, env, n_epochs):
         for i in range(1, n_epochs+1):
-            self.train_one_epoch(i)
+            self.train_one_epoch(env, i)

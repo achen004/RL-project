@@ -15,20 +15,25 @@ print("df =", df.shape)
 
 # Engineer financial indicators using the method imported above from the "TA" library
 df2 = add_all_ta_features(df, open='Open', high='High', low='Low', close='Close', volume='Volume', fillna=True)
+print(df2.columns)
 N = df2.shape[0]
 
 # Ratio for train/test split (what % of data to hold out as test)
 test_ratio = 0.2
 train_ratio = 1 - test_ratio
 
-# Initialize an environment for training the agent, and train the agent on it
+# Initialize an environment for training the agent
 env_window_size = 5
+
+
 train_env = MyCustomEnv(df2, window_size=env_window_size, frame_bound=(env_window_size, int(train_ratio*N)))
 
-#epsilon=0,  full exploration; TODO what if we implemented GREEDY approach? 
 # Initialize and train an agent on this environment by updating the policy function
-agent = Agent(train_env, epsilon=0, learning_rate=1e-4) #TODO adjust learning_rate; maybe annealize it 
-agent.train(n_epochs=20)
+agent = Agent(action_space_dim=train_env.action_space.n,
+              observation_space_dim=train_env.observation_space.shape,
+              learning_rate=1e-4) #TODO adjust learning_rate; maybe annealize it 
+
+agent.train(env=train_env, n_epochs=10)
 
 train_env.render_all()
 
