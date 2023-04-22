@@ -1,5 +1,4 @@
-
-import numpy as np
+# This code was taken from: https://github.com/facebookresearch/online-dt/blob/main/decision_transformer/models/model.py
 import torch
 import torch.nn as nn
 
@@ -17,6 +16,6 @@ class TrajectoryModel(nn.Module):
         # "masked" tokens or unspecified inputs can be passed in as None
         return None, None, None
 
-    def get_action(self, states, actions, rewards, **kwargs):
+    def get_predictions(self, states, actions, rewards, **kwargs):
         # these will come as tensors on the correct device
-        return torch.zeros_like(actions[-1])
+        return torch.zeros_like(states[-1]), torch.zeros_like(actions[-1]), torch.zeros_like(rewards[-1])

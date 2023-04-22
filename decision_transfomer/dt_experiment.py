@@ -12,7 +12,7 @@ import sys
 from evaluate_episodes import evaluate_episode, evaluate_episode_rtg
 from models.decisionTransformer import DecisionTransformer
 
-from training.seq_trainer import SequenceTrainer
+from seq_trainer import SequenceTrainer
 
 
 def discount_cumsum(x, gamma):

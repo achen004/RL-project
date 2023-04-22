@@ -1,1 +1,0 @@
-This code in this file was adapted from https://github.com/kzl/decision-transformer/blob/master/gym/decision_transformer/training
