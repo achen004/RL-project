@@ -102,21 +102,20 @@ class Agent(torch.nn.Module):
 
             #taking action: buy or sell or do nothing
             if action == Actions.Sell.value:
-                ep_rews.append([reward, 0, 0])
+                ep_rews.append([env._total_reward, 0, 0])
                 sell_count += 1
             elif action == Actions.Hold.value:
-                ep_rews.append([0, reward, 0])
+                ep_rews.append([0, env._total_reward, 0])
                 hold_count += 1
             elif action == Actions.Buy.value:
-                ep_rews.append([0, 0, reward])
+                ep_rews.append([0, 0, env._total_reward])
                 buy_count += 1
 
             # if reward > 0:
             #     print("[training epoch {}] info = {}".format(epoch_num, info))
         
-        print("[training epoch {}] total reward = {}".format(epoch_num, env._total_reward))
-
-        # print(f"[training] buy count = {env.buy_count}, sell count = {env.sell_count}, hold count = {env.hold_count}")    
+        print(f"[training epoch {epoch_num}] total reward = {env._total_reward}")
+        print(f"[training epoch {epoch_num}] buy count = {env.buy_count}, sell count = {env.sell_count}, hold count = {env.hold_count}")    
 
         # source: https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html#implementing-the-simplest-policy-gradient
 
@@ -131,7 +130,6 @@ class Agent(torch.nn.Module):
         self.policy_optimizer.step()
         self.scheduler.step() #learning rate optimizer step
         
-        print("loss =", batch_loss.item())
         return batch_loss, batch_rets, batch_lens
     
     def train(self, env, n_epochs):

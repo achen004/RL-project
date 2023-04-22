@@ -15,7 +15,7 @@ class Actions(Enum):
 # We assume unlimited margin (the agent can buy as much stock as it wants)
 class MyCustomEnv(StocksEnv, TradingEnv):
     # Call the StocksEnv constructor, and on top of that, initialize our own variables
-    def __init__(self, df, window_size, frame_bound, MAX_SHARES=50):
+    def __init__(self, df, window_size, frame_bound, MAX_SHARES=200):
         super().__init__(df, window_size, frame_bound)
 
         # We override StocksEnv's action space with our own action space, according to
@@ -83,17 +83,28 @@ class MyCustomEnv(StocksEnv, TradingEnv):
             self.action_history.append(action)
             
             current_price = self.prices[self._current_tick]
-            average_buy_price = np.mean(self.prices_of_shares_we_bought)
+            avg_buy_price = np.mean(self.prices_of_shares_we_bought)
             self.total_shares -= 1
-            self.prices_of_shares_we_bought = [average_buy_price for _ in range(self.total_shares)]
-            step_reward = (current_price - average_buy_price)
+            self.prices_of_shares_we_bought = [avg_buy_price for _ in range(self.total_shares)]
+            step_reward = (current_price - avg_buy_price)
 
-            self._total_reward += step_reward
             self.sell_count += 1
             return step_reward
-
-        # This only runs when we try to sell but we don't have any shares to sell
+        
         else:
+            """
+            The Agent only reachs here if he tries to sell but he has no shares to sell or tries to buy more than the max shares
+
+            If the agent holds for too long, we penalize it by a small amount.
+            This is to encourage the agent to not hold for too long, and to
+            trade more frequently.
+            """
+            # if action == Actions.Buy.value:
+            #     step_reward = -100
+            #     # More logic here to penalize the agent for buying too much
+            # elif action == Actions.Sell.value:
+            #     step_reward = -100
+            #     # More logic here to penalize the agent for selling too much
             self.action_history.append(-99)
             return step_reward
 
@@ -104,6 +115,9 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         super().reset() # call TradingEnv.reset()
         self.action_history = []
         self.total_shares = 0
+        self.buy_count = 0
+        self.sell_count = 0
+        self.hold_count = 0
         return self._get_observation()
 
     def step(self, action):
@@ -119,12 +133,15 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         step_reward = self._calculate_reward(action)
 
         # At the end of the episode, penalize the agent for any unrealized losses it may have
-        # incurred throughout the episode, and similarly, reward it for any unrealized gains
+        # incurred throughout the episode, and similarly, reward it for any unrealized gains,
+        # on the shares it holds
         if self._done:
             current_price = self.prices[self._current_tick]
-            average_buy_price = np.mean(self.prices_of_shares_we_bought)
-            step_reward = (current_price - average_buy_price)
-            self._total_reward += step_reward
+            avg_buy_price = np.mean(self.prices_of_shares_we_bought)
+            step_reward = (current_price - avg_buy_price) * self.total_shares
+            print("final step_reward =", step_reward)
+
+        self._total_reward += step_reward
 
         # Get the next state
         observation = self._get_observation()
@@ -158,7 +175,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
                 hold_ticks.append(tick)
             else:
                 denied_ticks.append(tick)
-        
+        print(f"len(buy_ticks) = {len(buy_ticks)}, len(sell_ticks) = {len(sell_ticks)}, len(hold_ticks) = {len(hold_ticks)}, len(denied_ticks) = {len(denied_ticks)}")
         plt.plot(buy_ticks, self.prices[buy_ticks], 'go', label="Buy")
         plt.plot(sell_ticks, self.prices[sell_ticks], 'ro', label="Sell")
         plt.legend()
