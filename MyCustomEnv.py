@@ -87,12 +87,12 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         #trend_cci: measures the difference between a security’s price change and its average price change. Positive = Strength; Negative =  Weakness
         #'trend_ema_fast' : EMA fast
         #'trend_ema_slow' : EMA slow
-        #'trend_kist' : identify major stock market  cycle junctures influenced by the longer and more dominant time spans, in order to better reflect the primary swings of stock market cycle
+        #'trend_kst' : identify major stock market  cycle junctures influenced by the longer and more dominant time spans, in order to better reflect the primary swings of stock market cycle
         #'trend_stc' :  charting indicator that is commonly used to identify market trends and provide buy and sell signals to traders; currency trends accelerate and decelerate in cyclical patterns.
         #'trend_vortex_ind_pos' : consists of two oscillators that capture positive and negative trend movement.
         #'trend_mass_index':  high-low range to identify trend reversals based on range expansions. It identifies range bulges that can foreshadow a reversal of the current trend
-        feature_space=['Close', 'Volume', 'momentum_rsi', 'volume_obv'] #,'volatility_atr', 'trend_macd_diff'
-        signal_features = self.df.loc[:, feature_space]
+        feature_space = ['volatility_atr', 'volume_obv', 'momentum_stoch_rsi', 'trend_vortex_ind_pos',  'trend_macd_diff']
+        signal_features = self.df.loc[:, feature_space] #,'volatility_atr', 'trend_macd_diff'
         #TODO cash at hand value; incorporate other features to set constraints amounts to buy/sell 
         signal_features = signal_features.to_numpy()[start:end]
         print("signal_features =", signal_features.shape)
