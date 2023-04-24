@@ -76,7 +76,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         # Prices over the window size
         prices = self.df.loc[:, 'Close'] #close prices
         prices = prices.to_numpy()[start:end]
-        self.total_profit = 0
+
         # Features to use as signal: need to adjust
         #Use: momentum_roc: identify overall  percent change in price from one period to the next
         #momentum_stoch_rsi: attuned to a specific security’s historical performance rather than a generalized analysis of price change.
