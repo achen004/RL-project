@@ -1,20 +1,26 @@
 # Script for scraping data from Yahoo Finance
 import pandas as pd
 import yfinance as yf
+import pandas as pd
 
-SPY = yf.Ticker("SPY")
-
-period = "1y"
-interval = "1h"
-
-data = SPY.history(period=period, interval=interval, start="2021-04-14")
-print(data.head())
-
-data.to_csv("SPY_prices_{}_{}.csv".format(period, interval))
-
-tickers = pd.read_csv("constituents_csv.csv")
-
-for tick in tickers["Symbol"]:
-    ticker = yf.Ticker(tick)
+def get_data(ticker, period, interval):
+    ticker = yf.Ticker(ticker)
     data = ticker.history(period=period, interval=interval)
-    data.to_csv(f"data/{tick}.csv")
+    return data
+
+stocks = pd.read_csv("spy_constituents.csv")
+tickers = stocks[stocks["Sector"] == "Information Technology"]["Symbol"].tolist()
+
+success_count = 0
+for tick in tickers:
+    period = "1y"
+    interval = "1h"
+    try:
+        data = get_data(tick, period, interval)
+        print(f"Got data for {tick} with shape {data.shape}")
+        data.to_csv(f"data/{tick}.csv")
+        success_count += 1
+    except:
+        print(f"Error with {tick}")
+
+print(f"{success_count} tickers retrieved successfully")

@@ -12,14 +12,14 @@ def layer_init(layer):
 
 # We define a deep RL agent
 class Agent(torch.nn.Module):
-    def __init__(self, learning_rate, action_space_dim, observation_space_dim):
+    def __init__(self, action_space_dim, observation_space_dim, learning_rate, num_hidden_nodes):
         super().__init__()
 
         # The number of rows and columns in the array representation of a state
         state_num_rows, state_num_cols = observation_space_dim
 
         # Number of nodes in hidden layer
-        num_hidden_nodes = 5 #originally 5; changing this doesn't impact outputs
+        self.num_hidden_nodes = num_hidden_nodes
 
         # A function (represented by a neural network) that takes in a state as input,
         # and outputs - for each possible action - the probability of taking that action
