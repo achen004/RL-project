@@ -25,6 +25,6 @@ agent = Agent(action_space_dim=env.action_space.n,
               observation_space_dim=env.observation_space.shape,
               learning_rate=1e-4) #TODO adjust learning_rate; maybe annealize it 
 
-agent.train(env, n_epochs=10)
+agent.train(env, n_epochs=1)
 
 env.render_all()

@@ -163,8 +163,9 @@ class DecisionTransformer(TrajectoryModel):
             self.predict_action = nn.Sequential(
                 *(
                     [nn.Linear(hidden_size, self.act_dim)]
-                    + ([nn.Tanh()] if action_tanh else [])
-                )
+                    + ([nn.ReLU()] if action_tanh else [])
+                ),
+                torch.nn.LogSoftmax()
             )
         self.stochastic_policy = stochastic_policy
         self.eval_context_length = eval_context_length
@@ -249,7 +250,7 @@ class DecisionTransformer(TrajectoryModel):
         # predict next state given state and action
         state_preds = self.predict_state(x[:, 2])
         # predict next action given state
-        action_preds = self.predict_action(x[:, 1])
+        action_preds = self.predict_action.forward(x[:, 1])
 
         return state_preds, action_preds, return_preds
 

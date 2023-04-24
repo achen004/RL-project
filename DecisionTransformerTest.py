@@ -3,9 +3,11 @@ import sys
 
 import gym
 import gym_mtsim
+import pandas as pd
+from ta import add_all_ta_features
 from decision_transfomer.models.decisionTransformer import DecisionTransformer
 # from decision_transfomer.models.decisionTransformer import DecisionTransformer
-from main import MyCustomEnv, df2, train_ratio, N
+from MyCustomEnv import MyCustomEnv
 
 import numpy as np
 import torch
@@ -19,7 +21,7 @@ MAX_EPISODE_LEN =1000
 
 scale = 1000
 action_range = [0,1]
-K = 1
+K = 10
 embed_dim =128
 n_layer = 4
 n_head = 4
@@ -55,14 +57,25 @@ eval_interval = 10
 # environment options
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-env = gym.make("stocks-unhedge-v0")
+df = pd.read_csv("SPY_prices_2y_1h.csv")
+df_test = pd.read_csv("data/AAPL.csv")
+#df = pd.read_csv("SPY_prices_2y_1h.csv")
 
-dt_train_env = MyCustomEnv(df2, window_size=1, frame_bound=(5, int(train_ratio*N)))
+# Engineer financial indicators using the method imported above from the "TA" library
+df2 = add_all_ta_features(df, open='Open', high='High', low='Low', close='Close', volume='Volume', fillna=True)
+df2_test = add_all_ta_features(df_test, open='Open', high='High', low='Low', close='Close', volume='Volume', fillna=True)
+# print(df2.columns)
+N = df2.shape[0]
+
+# Initialize an environment for the agent to execute trades
+env_window_size = 1
+
+dt_train_env = MyCustomEnv(df2, window_size=env_window_size, frame_bound=(env_window_size, N))
 state = dt_train_env.reset()
 state_dim = dt_train_env.observation_space.shape[1]
-print("action_space", dt_train_env.action_space)
-act_dim = 2
+act_dim = 3
 target_entropy = -act_dim
+
 model = DecisionTransformer(
     state_dim=state_dim,
     act_dim=act_dim,
@@ -78,7 +91,7 @@ model = DecisionTransformer(
     n_positions=1024,
     resid_pdrop=dropout,
     attn_pdrop=dropout,
-    stochastic_policy=True,
+    stochastic_policy=False,
     ordering=ordering,
     init_temperature=init_temperature,
     target_entropy= target_entropy,
@@ -92,9 +105,9 @@ def randomInit(context):
     init_dones = []
     for i in range(context):
         if random() < 0.5:
-            action = np.array([0,1])
+            action = np.array([0,0,1])
         else:
-            action = np.array([1,0])
+            action = np.array([1,0,0])
         
         state, rew, done, info = dt_train_env.step(action=Categorical(torch.tensor(action, dtype=torch.float)).sample().item())
         init_states.append(state)
@@ -112,6 +125,7 @@ def randomInit(context):
     return init_states, init_actions, init_rewards, init_rtg, timesteps
 states, actions, rewards, rtg, timesteps = randomInit(K)
 
+
 _, action_preds, _ = model.forward(
     states,
     actions,
@@ -120,8 +134,15 @@ _, action_preds, _ = model.forward(
     timesteps,
     ordering=True,
 )
-
-print(action_preds.log_likelihood())
+print(actions[-1])
+print(action_preds[-1])
+action =Categorical(action_preds[-1]).sample().item()
+print(action)
+# state, rew, done, info = dt_train_env.step(action=Categorical(action_preds).sample().item())
+# print(state)
+# print(rew)
+# print(done)
+# print(info)
 
 optimizer = Lamb(
     model.parameters(),
@@ -134,25 +155,24 @@ scheduler = torch.optim.lr_scheduler.LambdaLR(
     optimizer, lambda steps: min((steps + 1) /warmup_steps, 1)
 )
 
-log_temperature_optimizer = torch.optim.Adam(
-    [model.log_temperature],
-    lr=1e-4,
-    betas=[0.9, 0.999],
-)
 
 online_iter = 0
 total_transitions_sampled = 0
 reward_scale = 1
 
-trainer = SequenceTrainer(
-    model=model,
-    optimizer=optimizer,
-    log_temperature_optimizer=log_temperature_optimizer,
-    scheduler=scheduler,
-    device=device,
-)
+# trainer = SequenceTrainer(
+#     model=model,
+#     optimizer=optimizer,
+#     log_temperature_optimizer=log_temperature_optimizer,
+#     scheduler=scheduler,
+#     device=device,
+# )
 
-def train_step_stochastic(self, loss_fn, trajs):
+def loss_fn(a_hat_dist, a, padding_mask):
+    ...
+
+
+def train_step_stochastic(self, trajs):
     (
         states,
         actions,
@@ -166,7 +186,7 @@ def train_step_stochastic(self, loss_fn, trajs):
     action_target = torch.clone(actions)
 
     # forward pass
-    _, action_preds, _ = self.model.forward(
+    _, action_preds, _ = model.forward(
         states,
         actions,
         rewards,
@@ -179,23 +199,15 @@ def train_step_stochastic(self, loss_fn, trajs):
     loss, nll, entropy = loss_fn(
         action_preds,  # a_hat_dist
         action_target,
-        padding_mask =
-        model.temperature().detach()  # no gradient taken here
+        padding_mask = padding_mask,
     )
-    self.optimizer.zero_grad()
+    optimizer.zero_grad()
     loss.backward()
-    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.25)
-    self.optimizer.step()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 0.25)
+    optimizer.step()
 
-    self.log_temperature_optimizer.zero_grad()
-    temperature_loss = (
-        self.model.temperature() * (entropy - self.model.target_entropy).detach()
-    )
-    temperature_loss.backward()
-    self.log_temperature_optimizer.step()
-
-    if self.scheduler is not None:
-        self.scheduler.step()
+    if scheduler is not None:
+        scheduler.step()
 
     return (
         loss.detach().cpu().item(),
@@ -203,3 +215,5 @@ def train_step_stochastic(self, loss_fn, trajs):
         entropy.detach().cpu().item(),
     )
 
+
+# loss, nll, entropy = train_step_stochastic(model, (states, actions, rewards, rtg, timesteps, ordering, torch.ones((env_window_size, act_dim), dtype=torch.long)))
