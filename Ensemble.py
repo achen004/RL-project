@@ -17,14 +17,16 @@ N = df2.shape[0]
 
 env_window_size = 5
 env = MyCustomEnv(df2, window_size=env_window_size, frame_bound=(env_window_size, N))#, MAX_SHARES=1000)
-
+obs = env.reset()
 # Train the models
 ppo_model = PPO("MlpPolicy", env, verbose=0)
 ppo_model.learn(total_timesteps=1000)
 
+obs = env.reset()
 a2c_model = A2C("MlpPolicy", env, verbose=0)
 a2c_model.learn(total_timesteps=1000)
 
+obs = env.reset()
 dqn_model = DQN("MlpPolicy", env, verbose=0)
 dqn_model.learn(total_timesteps=1000)
 
@@ -42,5 +44,5 @@ for _ in range(N - env_window_size):
     majority_action = Counter(actions).most_common(1)[0][0]
     
     obs, rewards, dones, info = env.step(majority_action)
-
+    
 env.render_all()

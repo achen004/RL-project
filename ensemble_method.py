@@ -24,16 +24,21 @@ from config import config
 from env.EnvMultipleStock_train import StockEnvTrain
 from env.EnvMultipleStock_validation import StockEnvValidation
 from env.EnvMultipleStock_trade import StockEnvTrade
+#our environment
+from MyCustomEnv import MyCustomEnv
 
+"""In the main file we would use a prebuilt agent from stable baselines to run instead of our Agent"""
 
 def train_A2C(env_train, model_name, timesteps=25000):
-    """A2C model"""
-
+    """A2C model, using a prebuilt model (our policy function?)
+    env_train: instance of MyCustomEnv
+    """
     start = time.time()
     model = A2C('MlpPolicy', env_train, verbose=0)
     model.learn(total_timesteps=timesteps)
     end = time.time()
 
+    #saves the model
     model.save(f"{config.TRAINED_MODEL_DIR}/{model_name}")
     print('Training time (A2C): ', (end - start) / 60, ' minutes')
     return model
@@ -149,9 +154,15 @@ def get_validation_sharpe(iteration):
              df_total_value['daily_return'].std()
     return sharpe
 
-
-def run_ensemble_strategy(df, unique_trade_date, rebalance_window, validation_window) -> None:
-    """Ensemble Strategy that combines PPO, A2C and DDPG"""
+#We use an ensemble strategy to compete with each other to obtain the best performance
+def run_ensemble_strategy(df, env_window_size, rebalance_window, validation_window) -> None:
+    #TODO: split original dataframe to have validation set
+    """Ensemble Strategy that combines PPO, A2C and DDPG
+    Feeds in dataframe: df
+    env_window_size: length of our list of financial indicators
+    Include validation, test split amounts for our dataset
+    ?Bayesian Meta Learning?
+    """
     print("============Start Ensemble Strategy============")
     # for ensemble model, it's necessary to feed the last state
     # of the previous model to the current model as the initial state
@@ -165,50 +176,51 @@ def run_ensemble_strategy(df, unique_trade_date, rebalance_window, validation_wi
 
     # based on the analysis of the in-sample data
     #turbulence_threshold = 140
-    insample_turbulence = df[(df.datadate<20151000) & (df.datadate>=20090000)]
-    insample_turbulence = insample_turbulence.drop_duplicates(subset=['datadate'])
-    insample_turbulence_threshold = np.quantile(insample_turbulence.turbulence.values, .90)
+    #we don't use turbulence
+    # insample_turbulence = df[(df.datadate<20151000) & (df.datadate>=20090000)]
+    # insample_turbulence = insample_turbulence.drop_duplicates(subset=['datadate'])
+    # insample_turbulence_threshold = np.quantile(insample_turbulence.turbulence.values, .90)
 
     start = time.time()
     for i in range(rebalance_window + validation_window, len(unique_trade_date), rebalance_window):
         print("============================================")
         ## initial state is empty
-        if i - rebalance_window - validation_window == 0:
-            # inital state
-            initial = True
-        else:
-            # previous state
-            initial = False
+        # if i - rebalance_window - validation_window == 0:
+        #     # inital state
+        #     initial = True
+        # else:
+        #     # previous state
+        #     initial = False
 
-        # Tuning trubulence index based on historical data
-        # Turbulence lookback window is one quarter
-        end_date_index = df.index[df["datadate"] == unique_trade_date[i - rebalance_window - validation_window]].to_list()[-1]
-        start_date_index = end_date_index - validation_window*30 + 1
+        # # Tuning trubulence index based on historical data
+        # # Turbulence lookback window is one quarter
+        # end_date_index = df.index[df["datadate"] == unique_trade_date[i - rebalance_window - validation_window]].to_list()[-1]
+        # start_date_index = end_date_index - validation_window*30 + 1
 
-        historical_turbulence = df.iloc[start_date_index:(end_date_index + 1), :]
-        #historical_turbulence = df[(df.datadate<unique_trade_date[i - rebalance_window - validation_window]) & (df.datadate>=(unique_trade_date[i - rebalance_window - validation_window - 63]))]
+        # historical_turbulence = df.iloc[start_date_index:(end_date_index + 1), :]
+        # #historical_turbulence = df[(df.datadate<unique_trade_date[i - rebalance_window - validation_window]) & (df.datadate>=(unique_trade_date[i - rebalance_window - validation_window - 63]))]
 
 
-        historical_turbulence = historical_turbulence.drop_duplicates(subset=['datadate'])
+        # historical_turbulence = historical_turbulence.drop_duplicates(subset=['datadate'])
 
-        historical_turbulence_mean = np.mean(historical_turbulence.turbulence.values)
+        # historical_turbulence_mean = np.mean(historical_turbulence.turbulence.values)
 
-        if historical_turbulence_mean > insample_turbulence_threshold:
-            # if the mean of the historical data is greater than the 90% quantile of insample turbulence data
-            # then we assume that the current market is volatile,
-            # therefore we set the 90% quantile of insample turbulence data as the turbulence threshold
-            # meaning the current turbulence can't exceed the 90% quantile of insample turbulence data
-            turbulence_threshold = insample_turbulence_threshold
-        else:
-            # if the mean of the historical data is less than the 90% quantile of insample turbulence data
-            # then we tune up the turbulence_threshold, meaning we lower the risk
-            turbulence_threshold = np.quantile(insample_turbulence.turbulence.values, 1)
-        print("turbulence_threshold: ", turbulence_threshold)
+        # if historical_turbulence_mean > insample_turbulence_threshold:
+        #     # if the mean of the historical data is greater than the 90% quantile of insample turbulence data
+        #     # then we assume that the current market is volatile,
+        #     # therefore we set the 90% quantile of insample turbulence data as the turbulence threshold
+        #     # meaning the current turbulence can't exceed the 90% quantile of insample turbulence data
+        #     turbulence_threshold = insample_turbulence_threshold
+        # else:
+        #     # if the mean of the historical data is less than the 90% quantile of insample turbulence data
+        #     # then we tune up the turbulence_threshold, meaning we lower the risk
+        #     turbulence_threshold = np.quantile(insample_turbulence.turbulence.values, 1)
+        # print("turbulence_threshold: ", turbulence_threshold)
 
         ############## Environment Setup starts ##############
         ## training env
-        train = data_split(df, start=20090000, end=unique_trade_date[i - rebalance_window - validation_window])
-        env_train = DummyVecEnv([lambda: StockEnvTrain(train)])
+        N=df.shape[0]
+        env_train = MyCustomEnv(df, window_size=env_window_size, frame_bound=(env_window_size, N))
 
         ## validation env
         validation = data_split(df, start=unique_trade_date[i - rebalance_window - validation_window],
@@ -252,7 +264,7 @@ def run_ensemble_strategy(df, unique_trade_date, rebalance_window, validation_wi
         a2c_sharpe_list.append(sharpe_a2c)
         ddpg_sharpe_list.append(sharpe_ddpg)
 
-        # Model Selection based on sharpe ratio
+        # Model Selection based on sharpe ratio; check to see if its greater than the rest
         if (sharpe_ppo >= sharpe_a2c) & (sharpe_ppo >= sharpe_ddpg):
             model_ensemble = model_ppo
             model_use.append('PPO')
