@@ -12,7 +12,7 @@ def layer_init(layer):
 
 # We define a deep RL agent
 class Agent(torch.nn.Module):
-    def __init__(self, action_space_dim, observation_space_dim, learning_rate, num_hidden_nodes):
+    def __init__(self, action_space_dim, observation_space_dim, learning_rate, num_hidden_nodes, use_lr_scheduler):
         super().__init__()
 
         # The number of rows and columns in the array representation of a state
@@ -40,7 +40,9 @@ class Agent(torch.nn.Module):
         # Optimizer for training; TODO learning rate
         self.policy_optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
 
-        self.scheduler = lr_scheduler.StepLR(self.policy_optimizer, step_size=2, gamma=0.1)
+        self.use_lr_scheduler = use_lr_scheduler
+        if self.use_lr_scheduler:
+            self.scheduler = lr_scheduler.StepLR(self.policy_optimizer, step_size=2, gamma=0.1)
 
     # Compute policy loss for a mini-batch of states and actions; action vectors of policy probabilties for each state
     def policy_loss(self, states_batch, weights):
@@ -128,7 +130,8 @@ class Agent(torch.nn.Module):
         batch_loss.backward()
 
         self.policy_optimizer.step()
-        self.scheduler.step() #learning rate optimizer step
+        if self.use_lr_scheduler:
+            self.scheduler.step() # learning rate optimizer step
         
         return batch_loss, batch_rets, batch_lens
     

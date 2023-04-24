@@ -15,7 +15,7 @@ class Actions(Enum):
 # We assume unlimited margin (the agent can buy as much stock as it wants)
 class MyCustomEnv(StocksEnv, TradingEnv):
     # Call the StocksEnv constructor, and on top of that, initialize our own variables
-    def __init__(self, df, window_size, frame_bound, MAX_SHARES=200):
+    def __init__(self, df, window_size, frame_bound, MAX_SHARES):
         super().__init__(df, window_size, frame_bound)
 
         # We override StocksEnv's action space with our own action space, according to
@@ -217,8 +217,8 @@ class MyCustomEnv(StocksEnv, TradingEnv):
             else:
                 denied_ticks.append(tick)
         print(f"len(buy_ticks) = {len(buy_ticks)}, len(sell_ticks) = {len(sell_ticks)}, len(hold_ticks) = {len(hold_ticks)}, len(denied_ticks) = {len(denied_ticks)}")
-        plt.plot(buy_ticks, self.prices[buy_ticks], 'go', label="Buy")
-        plt.plot(sell_ticks, self.prices[sell_ticks], 'ro', label="Sell")
+        plt.plot(buy_ticks, self.prices[buy_ticks], 'g.', label="Buy")
+        plt.plot(sell_ticks, self.prices[sell_ticks], 'r.', label="Sell")
         plt.legend()
         # plt.plot(hold_ticks, self.prices[hold_ticks], 'bo', alpha=0.25)
         # plt.plot(denied_ticks, self.prices[denied_ticks], 'bo', alpha=0.25)

@@ -12,7 +12,7 @@ def parse_args():
 
     # The path to the CSV file containing the prices for the stock we want to trade
     parser.add_argument("--stock", type=str)
-    
+
     # Number of days of past stock prices for the agent to look at when it's deciding whether to buy/sell/hold
     parser.add_argument("--window-size", type=int)
 
@@ -20,8 +20,18 @@ def parse_args():
     parser.add_argument("--epochs", type=int)
     
     # Number of hidden nodes in the policy function (neural network) that the agent learns
+    # As a rule of thumb, this should be 2 or 3 times the window size
     parser.add_argument("--hidden-nodes", type=int)
-    
+
+    # Maximum number of shares we allow the agent to own at any given time
+    parser.add_argument("--max-shares", type=int)
+
+    # Learning rate for the policy gradient algorithm
+    parser.add_argument("--learning-rate", type=float)
+
+    # Whether or not to use the learning rate scheduler
+    parser.add_argument("--use-lr-scheduler", type=bool)
+
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -37,13 +47,17 @@ if __name__ == "__main__":
     N = df2.shape[0]
 
     # Initialize an environment for the agent to execute trades
-    env = MyCustomEnv(df2, window_size=args.window_size, frame_bound=(args.window_size, N))
+    env = MyCustomEnv(df2,
+                      window_size=args.window_size,
+                      frame_bound=(args.window_size, N),
+                      MAX_SHARES=args.max_shares)
 
     # Initialize and train an agent on this environment by updating the policy function
     agent = Agent(action_space_dim=env.action_space.n,
                   observation_space_dim=env.observation_space.shape,
-                  learning_rate=1e-4,
-                  num_hidden_nodes=args.hidden_nodes)
+                  learning_rate=args.learning_rate,
+                  num_hidden_nodes=args.hidden_nodes,
+                  use_lr_scheduler=args.use_lr_scheduler)
 
     agent.train(env, n_epochs=args.epochs)
 
