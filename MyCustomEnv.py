@@ -93,7 +93,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         #'trend_mass_index':  high-low range to identify trend reversals based on range expansions. It identifies range bulges that can foreshadow a reversal of the current trend
         feature_space = ['volatility_atr', 'volume_obv', 'momentum_stoch_rsi', 'trend_vortex_ind_pos',  'trend_macd_diff']
         signal_features = self.df.loc[:, feature_space] #,'volatility_atr', 'trend_macd_diff'
-        #TODO cash at hand value; incorporate other features to set constraints amounts to buy/sell 
+        
         signal_features = signal_features.to_numpy()[start:end]
         print("signal_features =", signal_features.shape)
         return prices, signal_features
