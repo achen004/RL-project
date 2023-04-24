@@ -37,7 +37,7 @@ class Agent(torch.nn.Module):
         for tensor in self.policy_function.parameters():
             tensor.requires_grad_(True) #record operations on tensor
         
-        # Optimizer for training; TODO learning rate
+        # Optimizer for training
         self.policy_optimizer = torch.optim.Adam(self.policy_function.parameters(), lr=learning_rate, eps=1e-5)
 
         self.use_lr_scheduler = use_lr_scheduler
@@ -49,8 +49,7 @@ class Agent(torch.nn.Module):
         """
         states_batch:  tensor format of stack of states from stored batch
         weights: weights of policy model
-        """
-        #TODO fix 
+        """ 
         # A tensor containing the policy for each state in the mini-batch
         policies_batch = self.policy_function(states_batch)
         return -(policies_batch * weights).mean()
