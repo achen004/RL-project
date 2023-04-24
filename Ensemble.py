@@ -44,5 +44,5 @@ for _ in range(N - env_window_size):
     majority_action = Counter(actions).most_common(1)[0][0]
     
     obs, rewards, dones, info = env.step(majority_action)
-
+    
 env.render_all()
