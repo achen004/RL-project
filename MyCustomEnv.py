@@ -11,8 +11,6 @@ class Actions(Enum):
 
 # Configure an environment for training - specifically we take StocksEnv
 # and customize it according to the problem we're trying to solve
-#
-# We assume unlimited margin (the agent can buy as much stock as it wants)
 class MyCustomEnv(StocksEnv, TradingEnv):
     # Call the StocksEnv constructor, and on top of that, initialize our own variables
     def __init__(self, df, window_size, frame_bound, MAX_SHARES):
@@ -35,10 +33,11 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         self.sell_count = 0
         self.hold_count = 0
 
-        #limit % of shares to buy 
-
         # List of actions we've taken over the course of an episode
         self.action_history = []
+
+        # Unrealized gain/loss the agent has at the end of the episode
+        self._unrealized_gain = 0
     
     # ====================================================================
     # Override the StocksEnv functions with our own functions
@@ -159,6 +158,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         self.buy_count = 0
         self.sell_count = 0
         self.hold_count = 0
+        self._unrealized_gain = 0
         return self._get_observation()
 
     def step(self, action):
@@ -173,16 +173,13 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         # Calculate the reward received in this action
         step_reward = self._calculate_reward(action)
 
-        # At the end of the episode, penalize the agent for any unrealized losses it may have
-        # incurred throughout the episode, and similarly, reward it for any unrealized gains,
-        # on the shares it holds
+        self._total_reward += step_reward
+
+        # Calculate the total unrealized gain/loss the agent has at the end of the episode
         if self._done:
             current_price = self.prices[self._current_tick]
             avg_buy_price = np.mean(self.prices_of_shares_we_bought)
-            step_reward = (current_price - avg_buy_price) * self.total_shares
-            print("final step_reward =", step_reward)
-
-        self._total_reward += step_reward
+            self._unrealized_gain = (current_price - avg_buy_price) * self.total_shares
 
         # Get the next state
         observation = self._get_observation()
@@ -216,12 +213,13 @@ class MyCustomEnv(StocksEnv, TradingEnv):
                 hold_ticks.append(tick)
             else:
                 denied_ticks.append(tick)
-        print(f"len(buy_ticks) = {len(buy_ticks)}, len(sell_ticks) = {len(sell_ticks)}, len(hold_ticks) = {len(hold_ticks)}, len(denied_ticks) = {len(denied_ticks)}")
+        
+        # print(f"len(buy_ticks) = {len(buy_ticks)}, len(sell_ticks) = {len(sell_ticks)}, len(hold_ticks) = {len(hold_ticks)}, len(denied_ticks) = {len(denied_ticks)}")
         plt.plot(buy_ticks, self.prices[buy_ticks], 'g.', label="Buy")
         plt.plot(sell_ticks, self.prices[sell_ticks], 'r.', label="Sell")
         plt.legend()
         # plt.plot(hold_ticks, self.prices[hold_ticks], 'bo', alpha=0.25)
         # plt.plot(denied_ticks, self.prices[denied_ticks], 'bo', alpha=0.25)
-
-        plt.suptitle("Total Reward: %.6f" % self._total_reward)
+        
+        plt.title(f"Realized Gain/Loss: {np.round(self._total_reward, 2)}, Unrealized Gain/Loss: {np.round(self._unrealized_gain, 2)}")
         plt.show()

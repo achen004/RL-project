@@ -116,8 +116,8 @@ class Agent(torch.nn.Module):
             # if reward > 0:
             #     print("[training epoch {}] info = {}".format(epoch_num, info))
         
-        print(f"[training epoch {epoch_num}] total reward = {env._total_reward}")
-        print(f"[training epoch {epoch_num}] buy count = {env.buy_count}, sell count = {env.sell_count}, hold count = {env.hold_count}")    
+        print(f"[training epoch {epoch_num}] realized gain (total reward) = {np.round(env._total_reward, 2)}")
+        # print(f"[training epoch {epoch_num}] buy count = {env.buy_count}, sell count = {env.sell_count}, hold count = {env.hold_count}")    
 
         # source: https://spinningup.openai.com/en/latest/spinningup/rl_intro3.html#implementing-the-simplest-policy-gradient
 
