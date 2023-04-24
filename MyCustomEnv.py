@@ -76,7 +76,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         # Prices over the window size
         prices = self.df.loc[:, 'Close'] #close prices
         prices = prices.to_numpy()[start:end]
-        self.total_profit = 0
+
         # Features to use as signal: need to adjust
         #Use: momentum_roc: identify overall  percent change in price from one period to the next
         #momentum_stoch_rsi: attuned to a specific security’s historical performance rather than a generalized analysis of price change.
@@ -91,9 +91,9 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         #'trend_stc' :  charting indicator that is commonly used to identify market trends and provide buy and sell signals to traders; currency trends accelerate and decelerate in cyclical patterns.
         #'trend_vortex_ind_pos' : consists of two oscillators that capture positive and negative trend movement.
         #'trend_mass_index':  high-low range to identify trend reversals based on range expansions. It identifies range bulges that can foreshadow a reversal of the current trend
-        feature_space=['Close', 'Volume', 'momentum_rsi', 'volume_obv'] #,'volatility_atr', 'trend_macd_diff'
+        feature_space = ['Close', 'Volume', 'momentum_rsi', 'volume_obv'] #,'volatility_atr', 'trend_macd_diff'
         signal_features = self.df.loc[:, feature_space]
-        #TODO cash at hand value; incorporate other features to set constraints amounts to buy/sell 
+        
         signal_features = signal_features.to_numpy()[start:end]
         print("signal_features =", signal_features.shape)
         return prices, signal_features
