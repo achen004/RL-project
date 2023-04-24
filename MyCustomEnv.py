@@ -123,7 +123,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
             self.action_history.append(action)
             
             current_price = self.prices[self._current_tick]
-            avg_buy_price = np.mean(self.prices_of_shares_we_bought)
+            avg_buy_price = np.mean(self.prices_of_shares_we_bought) if len(self.prices_of_shares_we_bought) > 0 else 0
             self.total_shares -= 1
             self.prices_of_shares_we_bought = [avg_buy_price for _ in range(self.total_shares)]
             step_reward = (current_price - avg_buy_price)
@@ -159,6 +159,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         self.sell_count = 0
         self.hold_count = 0
         self._unrealized_gain = 0
+        self.prices_of_shares_we_bought = []
         return self._get_observation()
 
     def step(self, action):
@@ -178,7 +179,7 @@ class MyCustomEnv(StocksEnv, TradingEnv):
         # Calculate the total unrealized gain/loss the agent has at the end of the episode
         if self._done:
             current_price = self.prices[self._current_tick]
-            avg_buy_price = np.mean(self.prices_of_shares_we_bought)
+            avg_buy_price = np.mean(self.prices_of_shares_we_bought) if len(self.prices_of_shares_we_bought) > 0 else 0
             self._unrealized_gain = (current_price - avg_buy_price) * self.total_shares
 
         # Get the next state
