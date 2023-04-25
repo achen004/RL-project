@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
         # If we have a tie (no majority):
         if check_tie(actions):
-            majority_action = int(ppo_action)
+            majority_action = Actions.Buy.value
         else:
             majority_action = Counter(actions).most_common(1)[0][0]
         
