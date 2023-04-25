@@ -54,7 +54,27 @@ class Agent(torch.nn.Module):
         # A tensor containing the policy for each state in the mini-batch
         policies_batch = self.policy_function(states_batch)
         return -(policies_batch * weights).mean()
-    
+
+    # Output an action
+    def predict(self, state):
+        # Before passing in the state array to the policy function, we have
+        # to convert it to a tensor in a specific format
+        state = torch.tensor(state) #window size x signal features, where the window size corresponds to the weekdays, and the num of signal features are our features
+
+        # Converts the array from shape (window_size, num_features) to (1, window_size, num_features)
+        state = torch.unsqueeze(state, dim=0)
+
+        # Compute the action we need to take
+        policy = self.policy_function(state) #[stochastic] policy aka agent
+
+        # Sample an action from the probability distribution (policy)
+        # This ensures exploration instead of just always choosing the greedy action
+        # Categorical policies are used in discrete action spaces
+        action = Categorical(policy).sample().item()
+        prob = policy[0, action]
+
+        return action, prob
+
     # Train for one epoch
     def train_one_epoch(self, env, epoch_num):
         # Make some empty lists for saving mini-batches of observations
@@ -79,21 +99,8 @@ class Agent(torch.nn.Module):
             # Save the current state in our minibatch
             batch_obs.append(state.copy())
 
-            # Before passing in the state array to the policy function, we have
-            # to convert it to a tensor in a specific format
-            state = torch.tensor(state) #window size x signal features, where the window size corresponds to the weekdays, and the num of signal features are our features 
-
-            # Converts the array from shape (window_size, num_features) to (1, window_size, num_features)
-            state = torch.unsqueeze(state, dim=0)
-
-            # Compute the action we need to take
-            policy = self.policy_function(state) #[stochastic] policy aka agent
-
-            # Sample an action from the probability distribution (policy)
-            # This ensures exploration instead of just always choosing the greedy action
-            # Categorical policies are used in discrete action spaces
-            action = Categorical(policy).sample().item()
-            prob = policy[0, action]
+            # Output an action
+            action, prob = self.predict(state)
 
             # Take that action, collect a reward, and observe the new state
             state, reward, done, info = env.step(action)
