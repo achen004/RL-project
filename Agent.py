@@ -27,6 +27,7 @@ class Agent(torch.nn.Module):
                                                    layer_init(torch.nn.Linear(in_features=state_num_rows * state_num_cols,
                                                                    out_features=num_hidden_nodes,
                                                                    dtype=torch.float64)),
+                                                                   torch.nn.ReLU(),
                                                    layer_init(torch.nn.Linear(in_features=num_hidden_nodes,
                                                                    out_features=action_space_dim,
                                                                    dtype=torch.float64)),
